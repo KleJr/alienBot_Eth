@@ -1,0 +1,170 @@
+<html>
+
+<head>
+    <title>AlienBot eth/usdt</title>
+    <style>
+        .t {
+            display: flex;
+            justify-content: space-between;
+            max-width: 400px;
+            max-height: 300px;
+            overflow: auto;
+            margin: 0 auto;
+            border-bottom: 1px solid #ccc;
+            padding: 1em;
+            flex-direction: row;
+        }
+
+        .over {
+            max-height: 300px;
+            overflow: auto;
+        }
+    </style>
+</head>
+
+<body style="background-color: #c2c2c2;  margin: 0 auto; border-bottom: 1px solid #ccc;
+padding: 1em; font-size: 10px;">
+    <div id="candles">
+        <div id="candle"></div>
+        <div id="candleAtual"></div>
+        <div id="penultimoCandle"></div>
+        <div id="ultimoCandle"></div>
+    </div>
+
+    <div class="t">
+        <div id="Compra" style="color: blue; " class="over"> Compra
+            <div id="trades"> </div>
+            <div id="tradesV"> </div>
+        </div>
+
+        <div id="Venda" style="color: red;" class="over"> Venda
+            <div id="vtrades"> </div>
+            <div id="vtradesV"> </div>
+        </div>
+    </div>
+    <div class="t">
+        <div id="tradeVolume" style="color:rgb(0, 114, 114)" class="over"> Ag. Compra
+            <div id="tradeVolumeDiv"> </div>
+        </div>
+        <div id="tradeVolume" style="color:rgb(0, 114, 114)" class="over"> Ag. Venda
+            <div id="tradeVolumeAbsorcaoDiv"> </div>
+        </div>
+    </div>
+
+</body>
+
+
+<script>
+    var bs = new WebSocket("wss://stream.binance.com:9443/ws/ethusdt@kline_15m")
+
+    var tradeDiv = document.getElementById('trades')
+    var tradeDivV = document.getElementById('tradesV')
+
+    var vtradeDiv = document.getElementById('vtrades')
+    var vtradeDivV = document.getElementById('vtradesV')
+
+    var candleDiv = document.getElementById('candle')
+    var candleAtualDiv = document.getElementById('candleAtual')
+    var ultimoCandleDiv = document.getElementById('ultimoCandle')
+    var penultimoCandleDiv = document.getElementById('penultimoCandle')
+
+    var tradeVolumeDiv = document.getElementById('tradeVolumeDiv')
+
+    var lastv;
+    var lastLastv;
+
+    var candleAtual;
+    var ultimoCandle;
+    var penultimoCandle;
+
+    var candletemp = { o: 0 };
+
+    var candleMenos2s = 0;
+
+    bs.onmessage = (event) => {
+        var msg = JSON.parse(event.data)
+        var v = parseInt(msg.k.v)
+        var V = parseInt(msg.k.V)
+
+        var o = parseInt(msg.k.o)
+        var c = parseInt(msg.k.c)
+        var h = parseInt(msg.k.h)
+        var l = parseInt(msg.k.l)
+
+        var date = new Date(msg.E);
+
+        var E = (
+            //" " + date.getDate() +
+            //"/" + (date.getMonth() + 1) +
+            // "/" + date.getFullYear() +
+            " " + date.getHours() +
+            ":" + date.getMinutes() +
+            ":" + date.getSeconds());
+
+        candle = { o: o, c: c, h: h, l: l, date: E }
+        candleDiv.innerHTML = (JSON.stringify(candle));
+
+
+        if (!candleAtual) candleAtual = candle;
+        if (!penultimoCandle) penultimoCandle = candle;
+        if (!ultimoCandle) ultimoCandle = candle;
+
+        var agressao = v - lastv
+        console.log(agressao)
+
+        if (agressao < 0) {
+            ultimoCandle = penultimoCandle;
+            penultimoCandle = candleAtual;
+            candleAtual = candletemp;
+
+            candleAtualDiv.innerHTML = (JSON.stringify(candleAtual));
+
+            ultimoCandleDiv.innerHTML = (JSON.stringify(ultimoCandle));
+            penultimoCandleDiv.innerHTML = (JSON.stringify(penultimoCandle));
+
+        }
+        candletemp = candle;
+
+        if ((agressao > 100)) {
+
+
+            if (V * 2 > v && agressao > 130) { // compra
+                if (candle.c >= candleAtual.h && candle.c > ultimoCandle.h && candle.c > penultimoCandle.h) {
+                    if (candleMenos2s.c > candle.c) {
+                        var absorcaoV = "**"
+                    }
+                    tradeDiv.innerHTML = ("<li>" + (absorcaoV ? absorcaoV : '') + candle.c + " (" + agressao + ') ' + E + '</li> ') + tradeDiv.innerHTML
+                    // tradeDivV.innerHTML = (agressao+ ' ')                  
+                }
+            }
+            else {//venda
+                if (agressao > 130 && candle.c <= candleAtual.l && candle.c < ultimoCandle.l && candle.c < penultimoCandle.l) {
+                    if (candleMenos2s.c < candle.c) {
+                        var absorcaoC = "**"
+                    }
+                    vtradeDiv.innerHTML = ("<li>" + (absorcaoC ? absorcaoC : '') + candle.c + " (" + agressao + ') ' + E + '</li> ') + vtradeDiv.innerHTML
+                    // vtradeDivV.innerHTML = (agressao + ' ')                  
+                }
+
+            }
+            if (candleMenos2s.c > candle.c && (!absorcaoC && !absorcaoV)) {
+                tradeVolumeAbsorcaoDiv.innerHTML = ("<li>" + candle.c + " (" + (JSON.stringify(agressao) + ') ' + E + '</li>')) +  tradeVolumeAbsorcaoDiv.innerHTML;
+            } else if ((!absorcaoC && !absorcaoV)) {
+                tradeVolumeDiv.innerHTML = ("<li>" + candle.c + " (" + (JSON.stringify(agressao) + ') ' + E + '</li>')) + tradeVolumeDiv.innerHTML;
+            }
+        }
+        candleDiv.scrollTop = candleDiv.scrollHeight;
+        candleAtualDiv.scrollTop = candleAtualDiv.scrollHeight;
+        ultimoCandleDiv.scrollTop = ultimoCandleDiv.scrollHeight;
+        penultimoCandleDiv.scrollTop = penultimoCandleDiv.scrollHeight;
+
+
+        lastLastv = lastv;
+        lastv = v;
+
+        candleMenos2s = candle
+    }
+
+</script>
+
+</html>
